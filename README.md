@@ -43,19 +43,26 @@ pip install requests
 
 ## Налаштування токена
 
-Токен бота очікується у змінній оточення `TELEGRAM_BOT_TOKEN`.
+Токен бота очікується у змінній оточення **`BOT_TOKEN`**.
 
-### Windows (PowerShell)
+### Railway
+
+1. Відкрийте проєкт у [Railway](https://railway.app).
+2. Перейдіть у **Variables** (або **Settings** → Variables).
+3. Додайте змінну: **Name** = `BOT_TOKEN`, **Value** = ваш токен від BotFather.
+4. Збережіть — сервіс перезапуститься з новим токеном.
+
+### Локально (Windows PowerShell)
 
 ```powershell
-$env:TELEGRAM_BOT_TOKEN="ВАШ_ТОКЕН_ВІД_BOTFATHER"
+$env:BOT_TOKEN="ВАШ_ТОКЕН_ВІД_BOTFATHER"
 python main.py
 ```
 
-### Windows (cmd)
+### Локально (cmd)
 
 ```cmd
-set TELEGRAM_BOT_TOKEN=ВАШ_ТОКЕН_ВІД_BOTFATHER
+set BOT_TOKEN=ВАШ_ТОКЕН_ВІД_BOTFATHER
 python main.py
 ```
 
