@@ -48,6 +48,23 @@ def send_photo(
         print(f"Failed to send photo: {exc}")
 
 
+def send_sticker(chat_id: int, sticker_id: str) -> None:
+    """
+    Надсилання стікера за file_id.
+    file_id можна взяти, надіславши стікер боту й подивившись update.
+    """
+    url = f"{API_URL}sendSticker"
+    payload: Dict[str, Any] = {
+        "chat_id": chat_id,
+        "sticker": sticker_id,
+    }
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        print(f"Failed to send sticker: {exc}")
+
+
 def get_updates(offset: Optional[int] = None) -> Dict[str, Any]:
     url = f"{API_URL}getUpdates"
     params: Dict[str, Any] = {"timeout": 100, "offset": offset}

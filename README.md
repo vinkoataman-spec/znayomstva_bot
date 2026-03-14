@@ -1,90 +1,92 @@
-# Telegram Dating Bot (простий варіант)
+# Telegram Dating Bot
 
-## Опис
+A simple Telegram bot for dating. Users register with a profile (gender, name, age, photo), browse other profiles with like/dislike actions, and can upgrade to premium for additional features.
 
-Простий Telegram-бот для знайомств:
+## Features
 
-- реєстрація користувача: стать → імʼя → вік → фото;
-- збереження анкети в памʼяті бота;
-- головне меню з кнопками: **Пошук**, **Мій профіль**, **Лайки**, **Підписка**, **Допомога**;
-- пошук анкет інших користувачів з лайками/дизлайками;
-- розділ «Хто мене лайкнув» для користувачів з преміум-підпискою (умовна логіка);
-- редагування профілю (імʼя, фото).
+- **Registration** — Gender → Name → Age → Photo
+- **Main menu** — Search, My Profile, Likes, Subscription, Help
+- **Search** — Browse other users' profiles with like/dislike actions
+- **My Profile** — View and edit your profile (name, photo)
+- **Likes** — See who liked you (premium only)
+- **Subscription** — Premium plans (currently test mode, no real payment)
 
-> Зараз усі дані зберігаються тільки в памʼяті процесу — після перезапуску бота все обнуляється.
+> All data is stored in memory. Restarting the bot clears profiles, likes, and states.
 
-## Структура проєкту
+## Project Structure
 
-- `main.py` — точка входу, нескінченний цикл `getUpdates` і передача апдейтів у хендлери.
-- `config.py` — зчитування токена з оточення, побудова `API_URL`.
-- `telegram_api.py` — низькорівневі функції роботи з Telegram API (`sendMessage`, `sendPhoto`, `getUpdates`).
-- `keyboards.py` — усі клавіатури (меню, вибір статі, редагування профілю, лайки).
-- `storage.py` — просте зберігання даних у памʼяті (анкети, стани, лайки, преміум).
-- `handlers.py` — уся бізнес-логіка бота (реєстрація, пошук, лайки, підписка, допомога).
-- `requirements.txt` — список Python-залежностей.
+| File | Description |
+|------|-------------|
+| `main.py` | Entry point, long-polling loop, routes updates to handlers |
+| `config.py` | Reads `BOT_TOKEN` from environment, builds `API_URL` |
+| `telegram_api.py` | Low-level Telegram API calls (`sendMessage`, `sendPhoto`, `getUpdates`) |
+| `keyboards.py` | Reply keyboards (main menu, gender, profile, search, etc.) |
+| `storage.py` | In-memory storage (profiles, states, likes, premium status) |
+| `handlers.py` | Business logic (registration, search, likes, subscription, help) |
+| `requirements.txt` | Python dependencies |
 
-## Вимоги
+## Requirements
 
 - Python 3.10+
-- Встановлений пакет `requests`
-- Телеграм-токен бота (від BotFather)
+- Telegram bot token (from [@BotFather](https://t.me/BotFather))
 
-## Установка
+## Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Або мінімально:
+Or minimally:
 
 ```bash
 pip install requests
 ```
 
-## Налаштування токена
+## Configuration
 
-Токен бота очікується у змінній оточення **`BOT_TOKEN`**.
+### Bot Token
 
-### Railway
+Set the environment variable **`BOT_TOKEN`** (or `TELEGRAM_BOT_TOKEN`) with your bot token from BotFather.
 
-1. Відкрийте проєкт у [Railway](https://railway.app).
-2. Перейдіть у **Variables** (або **Settings** → Variables).
-3. Додайте змінну: **Name** = `BOT_TOKEN`, **Value** = ваш токен від BotFather.
-4. Збережіть — сервіс перезапуститься з новим токеном.
+**Railway:**
 
-### Локально (Windows PowerShell)
+1. Open your project on [Railway](https://railway.app)
+2. Go to **Variables** (or **Settings** → Variables)
+3. Add: **Name** = `BOT_TOKEN`, **Value** = your token
+4. Save — the service will redeploy with the new token
+
+**Local (Windows PowerShell):**
 
 ```powershell
-$env:BOT_TOKEN="ВАШ_ТОКЕН_ВІД_BOTFATHER"
+$env:BOT_TOKEN="YOUR_BOT_TOKEN"
 python main.py
 ```
 
-### Локально (cmd)
+**Local (Linux/macOS):**
 
-```cmd
-set BOT_TOKEN=ВАШ_ТОКЕН_ВІД_BOTFATHER
+```bash
+export BOT_TOKEN="YOUR_BOT_TOKEN"
 python main.py
 ```
 
-## Запуск бота
+## Run
 
 ```bash
 python main.py
 ```
 
-Після запуску:
+Then:
 
-1. Знайдіть свого бота в Telegram (по юзернейму, який ви задали в BotFather).
-2. Натисніть **Start** або напишіть `/start`.
-3. Пройдіть реєстрацію (стать, імʼя, вік, фото).
-4. Після цього зʼявиться головне меню з кнопками.
+1. Find your bot in Telegram
+2. Send `/start`
+3. Complete registration (gender, name, age, photo)
+4. Use the main menu buttons
 
-## Обмеження / Нотатки
+## Limitations & Notes
 
-- Усі дані (анкети, лайки, стани) живуть тільки в памʼяті процесу.
-- Преміум-підписка зараз увімкається просто натисканням кнопки «Купити преміум».
-- Для реального продакшен-рішення потрібні:
-  - база даних (PostgreSQL / SQLite / інша);
-  - справжня платіжна інтеграція для підписок;
-  - додаткова валідація, логування, обробка помилок.
-
+- Data is stored in memory only; no persistence across restarts
+- Premium is activated by pressing the button (no real payment integration yet)
+- For production you would need:
+  - A database (PostgreSQL, SQLite)
+  - Real payment integration
+  - Proper validation, logging, and error handling

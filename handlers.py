@@ -23,7 +23,7 @@ from telegram_api import send_message, send_photo
 
 def start_registration(chat_id: int) -> None:
     states[chat_id] = "CHOOSING_GENDER"
-    send_message(chat_id, "Оберіть вашу стать:", reply_markup=gender_keyboard())
+    send_message(chat_id, "✨ Оберіть вашу стать:", reply_markup=gender_keyboard())
 
 
 def handle_registration_step(message: Dict[str, Any]) -> None:
@@ -77,7 +77,8 @@ def handle_registration_step(message: Dict[str, Any]) -> None:
 
             send_message(
                 chat_id,
-                "Ваша анкета збережена! Стать, імʼя, вік і фото записані.",
+                "✅ Ваша анкета збережена!\n"
+                "Стать, імʼя, вік і фото записані. 💖",
             )
             send_welcome_after_registration(chat_id)
         else:
@@ -89,14 +90,15 @@ def handle_registration_step(message: Dict[str, Any]) -> None:
 
 def send_welcome_after_registration(chat_id: int) -> None:
     text = (
-        "Це бот для знайомств. Тут ти можеш знайти собі другу половинку.\n\n"
-        "Основні можливості:\n"
+        "💘 Ласкаво просимо в бот для знайомств!\n"
+        "Тут ти можеш знайти собі другу половинку.\n\n"
+        "✨ Основні можливості:\n"
         "• «Пошук» — перегляд анкет інших людей.\n"
         "• «Мій профіль» — перегляд і редагування своєї анкети.\n"
         "• «Лайки» — хто тебе лайкнув (доступно тільки з преміумом).\n"
         "• «Підписка» — перегляд тарифів та оформлення преміуму.\n"
         "• «Допомога» — звʼязок з адміністратором.\n\n"
-        "Без преміуму діє обмеження, наприклад, до 25 повідомлень або дій на день."
+        "Без преміуму діє обмеження, наприклад, до 25 повідомлень або дій на день. ⏳"
     )
     send_message(chat_id, text, reply_markup=main_menu_keyboard())
 
@@ -105,13 +107,14 @@ def show_profile(chat_id: int) -> None:
     if not is_profile_complete(chat_id):
         send_message(
             chat_id,
-            "У вас ще немає заповненої анкети. Натисніть /start, щоб створити її.",
+            "ℹ️ У вас ще немає заповненої анкети.\n"
+            "Натисніть /start, щоб створити її.",
         )
         return
 
     profile = users[chat_id]
     caption = (
-        f"Ваша анкета:\n"
+        f"📋 Ваша анкета:\n"
         f"Стать: {profile['gender']}\n"
         f"Імʼя: {profile['name']}\n"
         f"Вік: {profile['age']}"
@@ -190,7 +193,8 @@ def start_search(chat_id: int) -> None:
     if not is_profile_complete(chat_id):
         send_message(
             chat_id,
-            "Спочатку заповніть анкету через /start, щоб інші могли вас бачити.",
+            "⚠️ Спочатку заповніть анкету через /start,\n"
+            "щоб інші могли вас бачити.",
         )
         return
 
@@ -202,7 +206,7 @@ def start_search(chat_id: int) -> None:
     if not candidates:
         send_message(
             chat_id,
-            "Поки що немає інших анкет для показу.",
+            "😔 Поки що немає інших анкет для показу.",
             reply_markup=main_menu_keyboard(),
         )
         return
@@ -272,7 +276,7 @@ def handle_search_actions(message: Dict[str, Any]) -> None:
     if not state:
         send_message(
             chat_id,
-            "Пошук не активний. Натисніть «Пошук» у меню.",
+            "ℹ️ Пошук не активний. Натисніть «Пошук» у меню.",
             reply_markup=main_menu_keyboard(),
         )
         states[chat_id] = "REGISTERED"
@@ -284,7 +288,7 @@ def handle_search_actions(message: Dict[str, Any]) -> None:
     if index >= len(candidates):
         send_message(
             chat_id,
-            "Немає більше анкет.",
+            "✅ Немає більше анкет.",
             reply_markup=main_menu_keyboard(),
         )
         states[chat_id] = "REGISTERED"
@@ -296,6 +300,8 @@ def handle_search_actions(message: Dict[str, Any]) -> None:
         likes_received.setdefault(target_id, [])
         if chat_id not in likes_received[target_id]:
             likes_received[target_id].append(chat_id)
+        if LIKE_STICKER_ID:
+            send_sticker(chat_id, LIKE_STICKER_ID)
         send_message(chat_id, "Ви поставили лайк цій анкеті.")
         search_state[chat_id]["index"] += 1
         show_current_candidate(chat_id)
@@ -335,7 +341,7 @@ def handle_likes_section(chat_id: int) -> None:
     if count == 0:
         send_message(
             chat_id,
-            "Поки що ніхто вас не лайкнув.",
+            "Поки що ніхто вас не лайкнув. 😌",
             reply_markup=main_menu_keyboard(),
         )
         return
@@ -352,7 +358,7 @@ def show_who_liked_me(chat_id: int) -> None:
     if not user_likes:
         send_message(
             chat_id,
-            "Немає лайків для показу.",
+            "Немає лайків для показу. 🙂",
             reply_markup=main_menu_keyboard(),
         )
         return
@@ -362,7 +368,7 @@ def show_who_liked_me(chat_id: int) -> None:
         if not profile:
             continue
         caption = (
-            f"Той, хто вас лайкнув:\n"
+            f"❤️ Той, хто вас лайкнув:\n"
             f"Стать: {profile['gender']}\n"
             f"Імʼя: {profile['name']}\n"
             f"Вік: {profile['age']}"
@@ -375,21 +381,21 @@ def show_who_liked_me(chat_id: int) -> None:
 
     send_message(
         chat_id,
-        "Це всі, хто вас лайкнув.",
+        "Це всі, хто вас лайкнув. 💌",
         reply_markup=main_menu_keyboard(),
     )
 
 
 def handle_subscription(chat_id: int) -> None:
     text = (
-        "Преміум-підписка відкриває додаткові можливості:\n"
+        "⭐ Преміум-підписка відкриває додаткові можливості:\n"
         "• Необмежена кількість переглядів анкет і лайків.\n"
         "• Доступ до розділу «Хто мене лайкнув».\n\n"
         "Тарифи (приклад):\n"
         "• 1 місяць — 5$\n"
         "• 3 місяці — 12$\n"
         "• 6 місяців — 20$\n\n"
-        "Для тесту тут ми просто дамо вам преміум після натискання «Купити преміум»."
+        "Для тесту тут ми просто дамо вам преміум після натискання «Купити преміум». ✨"
     )
     send_message(chat_id, text, reply_markup=buy_premium_keyboard())
 
@@ -398,7 +404,8 @@ def grant_premium(chat_id: int) -> None:
     premium_users[chat_id] = True
     send_message(
         chat_id,
-        "Преміум-підписка активована! Тепер доступний розділ «Лайки».",
+        "🎉 Преміум-підписка активована!\n"
+        "Тепер доступний розділ «Лайки».",
         reply_markup=main_menu_keyboard(),
     )
 
