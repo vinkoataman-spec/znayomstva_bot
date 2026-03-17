@@ -10,6 +10,7 @@ from keyboards import (
     profile_actions_keyboard,
     search_actions_keyboard,
     subscription_keyboard,
+    end_chat_keyboard,
 )
 from storage import (
     admin_state,
@@ -19,6 +20,8 @@ from storage import (
     has_premium,
     premium_expiry,
     set_premium,
+    can_use_free_like,
+    register_free_like,
     search_state,
     states,
     users,
@@ -34,6 +37,7 @@ STICKER_WELCOME = os.getenv("STICKER_WELCOME")
 STICKER_PROFILE_SAVED = os.getenv("STICKER_PROFILE_SAVED")
 STICKER_LIKE = os.getenv("STICKER_LIKE")
 STICKER_PREMIUM = os.getenv("STICKER_PREMIUM")
+STICKER_MESSAGE = os.getenv("STICKER_MESSAGE")
 
 
 def start_registration(chat_id: int) -> None:
@@ -316,7 +320,18 @@ def handle_search_actions(message: Dict[str, Any]) -> None:
 
     target_id = candidates[index]
 
-    if text == "Лайк":
+    if text in ("Лайк", "👍 Лайк"):
+        if not has_premium(chat_id):
+            if not can_use_free_like(chat_id):
+                send_message(
+                    chat_id,
+                    "Ви використали всі 20 лайків/дизлайків на цей тиждень.\n"
+                    "Щоб продовжити ставити оцінки без обмежень, оформіть преміум. ⭐",
+                    reply_markup=buy_premium_keyboard(),
+                )
+                return
+            register_free_like(chat_id)
+
         likes_received.setdefault(target_id, [])
         if chat_id not in likes_received[target_id]:
             likes_received[target_id].append(chat_id)
@@ -326,9 +341,42 @@ def handle_search_actions(message: Dict[str, Any]) -> None:
         search_state[chat_id]["index"] += 1
         show_current_candidate(chat_id)
 
-    elif text == "Дизлайк" or text == "Наступний":
+    elif text in ("Дизлайк", "👎 Дизлайк", "Наступний"):
+        if text != "Наступний" and not has_premium(chat_id):
+            if not can_use_free_like(chat_id):
+                send_message(
+                    chat_id,
+                    "Ви використали всі 20 лайків/дизлайків на цей тиждень.\n"
+                    "Щоб продовжити ставити оцінки без обмежень, оформіть преміум. ⭐",
+                    reply_markup=buy_premium_keyboard(),
+                )
+                return
+            register_free_like(chat_id)
         search_state[chat_id]["index"] += 1
         show_current_candidate(chat_id)
+
+    elif text in ("✉️ Повідомлення", "Повідомлення"):
+        if not has_premium(chat_id):
+            send_message(
+                chat_id,
+                "Надсилати повідомлення можуть лише користувачі з преміум-підпискою.",
+                reply_markup=buy_premium_keyboard(),
+            )
+            return
+        # зберігаємо, кому пишемо
+        if chat_id not in search_state:
+            search_state[chat_id] = {}
+        search_state[chat_id]["message_target"] = target_id
+        states[chat_id] = "SENDING_MESSAGE_TO_USER"
+        if STICKER_MESSAGE:
+            send_sticker(chat_id, STICKER_MESSAGE)
+        send_message(
+            chat_id,
+            "✉️ Напишіть повідомлення для цього користувача.\n"
+            "Воно буде надіслане йому в боті.\n\n"
+            "Натисніть «Закінчити чат», щоб повернутися до перегляду анкет.",
+            reply_markup=end_chat_keyboard(),
+        )
 
     elif text == "Вийти з пошуку":
         states[chat_id] = "REGISTERED"
@@ -349,9 +397,20 @@ def handle_search_actions(message: Dict[str, Any]) -> None:
 
 def handle_likes_section(chat_id: int) -> None:
     if not has_premium(chat_id):
+        exp = premium_expiry(chat_id)
+        if exp:
+            text = (
+                "⏱ Ваша преміум-підписка закінчилась.\n"
+                "Щоб знову бачити, хто вас лайкнув, оформіть нову підписку. ⭐"
+            )
+        else:
+            text = (
+                "У вас немає доступу до цієї функції, "
+                "оскільки у вас не підключена преміум-підписка."
+            )
         send_message(
             chat_id,
-            "У вас немає доступу до цієї функції, оскільки у вас не підключена преміум-підписка.",
+            text,
             reply_markup=buy_premium_keyboard(),
         )
         return
@@ -514,11 +573,12 @@ def handle_admin_commands(message: Dict[str, Any]) -> bool:
 
 
 def handle_help(chat_id: int) -> None:
+    states[chat_id] = "ASKING_HELP"
     text = (
-        "Якщо у вас виникли питання або потрібна допомога,\n"
-        "напишіть, будь ласка, своє повідомлення тут, і ми його переглянемо."
+        "✉️ Напишіть, будь ласка, ваше запитання або опишіть проблему.\n"
+        "Адміністратор отримає це повідомлення і відповість вам у боті."
     )
-    send_message(chat_id, text, reply_markup=main_menu_keyboard())
+    send_message(chat_id, text, reply_markup=end_chat_keyboard())
 
 
 def handle_update(update: Dict[str, Any]) -> None:
@@ -557,6 +617,96 @@ def handle_update(update: Dict[str, Any]) -> None:
         handle_search_actions(message)
         return
 
+    if state == "ASKING_HELP":
+        if text == "Закінчити чат":
+            states[chat_id] = "REGISTERED"
+            send_message(
+                chat_id,
+                "Чат з підтримкою завершено.",
+                reply_markup=main_menu_keyboard(),
+            )
+            return
+        question = text.strip()
+        if not question:
+            send_message(
+                chat_id,
+                "Повідомлення порожнє. Напишіть, будь ласка, текст запитання.",
+                reply_markup=end_chat_keyboard(),
+            )
+            return
+        # Відправляємо адміну
+        if ADMIN_CHAT_ID > 0:
+            username = user.get("username")
+            first_name = user.get("first_name")
+            last_name = user.get("last_name")
+            nick = f"@{username}" if isinstance(username, str) and username else "(no username)"
+            full_name = " ".join(
+                [p for p in [first_name, last_name] if isinstance(p, str) and p]
+            ).strip() or "(no name)"
+            admin_text = (
+                "🆘 Новий запит у підтримку\n\n"
+                f"User ID: {chat_id}\n"
+                f"Name: {full_name}\n"
+                f"Nick: {nick}\n\n"
+                f"Повідомлення:\n{question}"
+            )
+            send_message(ADMIN_CHAT_ID, admin_text)
+        # Відповідь користувачу
+        states[chat_id] = "REGISTERED"
+        send_message(
+            chat_id,
+            "✅ Ваше повідомлення відправлено адміністратору.\n"
+            "Він відповість вам тут, у боті.",
+            reply_markup=main_menu_keyboard(),
+        )
+        return
+
+    if state == "SENDING_MESSAGE_TO_USER":
+        if text == "Закінчити чат":
+            states[chat_id] = "SEARCHING"
+            if chat_id in search_state and "message_target" in search_state[chat_id]:
+                del search_state[chat_id]["message_target"]
+            send_message(
+                chat_id,
+                "Чат завершено. Продовжуємо пошук анкет.",
+                reply_markup=search_actions_keyboard(),
+            )
+            return
+        target_id = search_state.get(chat_id, {}).get("message_target")
+        text_to_send = message.get("text", "").strip()
+        if not target_id:
+            states[chat_id] = "REGISTERED"
+            send_message(
+                chat_id,
+                "Не знайдено користувача для повідомлення. Спробуйте знову через пошук.",
+                reply_markup=main_menu_keyboard(),
+            )
+            return
+        if not text_to_send:
+            send_message(
+                chat_id,
+                "Повідомлення порожнє. Напишіть текст для користувача.",
+            )
+            return
+        # надсилаємо іншому користувачу
+        send_message(
+            target_id,
+            "📩 Вам надійшло нове повідомлення від іншого користувача бота:\n\n"
+            f"{text_to_send}",
+        )
+        if STICKER_MESSAGE:
+            send_sticker(target_id, STICKER_MESSAGE)
+        send_message(
+            chat_id,
+            "✅ Повідомлення надіслано.",
+            reply_markup=search_actions_keyboard(),
+        )
+        # повертаємо в режим пошуку
+        states[chat_id] = "SEARCHING"
+        if chat_id in search_state and "message_target" in search_state[chat_id]:
+            del search_state[chat_id]["message_target"]
+        return
+
     if state == "CHOOSING_SUBSCRIPTION":
         if text in ("🗓️ Підписка на тиждень", "Підписка на тиждень"):
             states[chat_id] = "REGISTERED"
@@ -589,7 +739,8 @@ def handle_update(update: Dict[str, Any]) -> None:
     elif text in ("⭐ Підписка", "Підписка"):
         handle_subscription(chat_id)
     elif text == "Купити преміум":
-        grant_premium(chat_id)
+        # з розділу «Лайки» перекидаємо в «Підписка», без авто-активації
+        handle_subscription(chat_id)
     elif text in ("❓ Допомога", "Допомога"):
         handle_help(chat_id)
     elif text == "Назад до меню":

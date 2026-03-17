@@ -45,7 +45,8 @@ def buy_premium_keyboard() -> Dict[str, Any]:
 def search_actions_keyboard() -> Dict[str, Any]:
     return {
         "keyboard": [
-            [{"text": "Лайк"}, {"text": "Дизлайк"}],
+            [{"text": "👍 Лайк"}, {"text": "👎 Дизлайк"}],
+            [{"text": "✉️ Повідомлення"}],
             [{"text": "Наступний"}, {"text": "Вийти з пошуку"}],
         ],
         "resize_keyboard": True,
@@ -95,6 +96,16 @@ def subscription_keyboard() -> Dict[str, Any]:
                 {"text": "📅 Підписка на місяць"},
             ],
             [{"text": "Назад до меню"}],
+        ],
+        "resize_keyboard": True,
+        "one_time_keyboard": False,
+    }
+
+
+def end_chat_keyboard() -> Dict[str, Any]:
+    return {
+        "keyboard": [
+            [{"text": "Закінчити чат"}],
         ],
         "resize_keyboard": True,
         "one_time_keyboard": False,
