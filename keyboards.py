@@ -4,11 +4,17 @@ from typing import Any, Dict
 def main_menu_keyboard() -> Dict[str, Any]:
     return {
         "keyboard": [
-            [{"text": "Пошук"}],
-            [{"text": "Мій профіль"}],
-            [{"text": "Лайки"}],
-            [{"text": "Підписка"}],
-            [{"text": "Допомога"}],
+            [
+                {"text": "🔍 Пошук"},
+                {"text": "👤 Мій профіль"},
+            ],
+            [
+                {"text": "❤️ Лайки"},
+                {"text": "⭐ Підписка"},
+            ],
+            [
+                {"text": "❓ Допомога"},
+            ],
         ],
         "resize_keyboard": True,
         "one_time_keyboard": False,
@@ -74,6 +80,20 @@ def likes_menu_keyboard() -> Dict[str, Any]:
     return {
         "keyboard": [
             [{"text": "Переглянути, хто мене лайкнув"}],
+            [{"text": "Назад до меню"}],
+        ],
+        "resize_keyboard": True,
+        "one_time_keyboard": False,
+    }
+
+
+def subscription_keyboard() -> Dict[str, Any]:
+    return {
+        "keyboard": [
+            [
+                {"text": "🗓️ Підписка на тиждень"},
+                {"text": "📅 Підписка на місяць"},
+            ],
             [{"text": "Назад до меню"}],
         ],
         "resize_keyboard": True,

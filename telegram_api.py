@@ -9,6 +9,7 @@ def send_message(
     chat_id: int,
     text: str,
     reply_markup: Optional[Dict[str, Any]] = None,
+    parse_mode: Optional[str] = None,
 ) -> None:
     url = f"{API_URL}sendMessage"
     payload: Dict[str, Any] = {
@@ -17,6 +18,8 @@ def send_message(
     }
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup
+    if parse_mode is not None:
+        payload["parse_mode"] = parse_mode
 
     try:
         response = requests.post(url, json=payload, timeout=10)
