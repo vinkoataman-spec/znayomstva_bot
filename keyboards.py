@@ -98,6 +98,7 @@ def edit_profile_keyboard() -> Dict[str, Any]:
         "keyboard": [
             [{"text": "Змінити імʼя"}],
             [{"text": "Змінити фото"}],
+            [{"text": "🔁 Змінити фільтри пошуку"}],
             [{"text": "Назад до меню"}],
         ],
         "resize_keyboard": True,

@@ -20,13 +20,16 @@ from keyboards import (
 from storage import (
     admin_state,
     add_like,
+    clear_search_filters,
     ensure_user,
     get_all_complete_users,
     get_likes_received,
+    get_saved_search_filters,
     get_user,
     is_profile_complete,
     has_premium,
     premium_expiry,
+    save_search_filters,
     set_premium,
     can_use_free_like,
     register_free_like,
@@ -208,6 +211,15 @@ def handle_edit_profile(message: Dict[str, Any]) -> None:
         elif text == "Змінити фото":
             states[chat_id] = "EDITING_PHOTO"
             send_message(chat_id, "Надішліть нову фотографію:")
+        elif text in ("🔁 Змінити фільтри пошуку", "Змінити фільтри пошуку"):
+            clear_search_filters(chat_id)
+            states[chat_id] = "CHOOSING_SEARCH_GENDER"
+            send_message(
+                chat_id,
+                "🔎 Налаштуйте фільтри пошуку знову.\n"
+                "Етап 1/3: Оберіть, яку стать ви шукаєте:",
+                reply_markup=search_gender_keyboard(),
+            )
         elif text == "Назад до меню":
             states[chat_id] = "REGISTERED"
             send_message(
@@ -251,6 +263,17 @@ def start_search(chat_id: int) -> None:
             chat_id,
             "⚠️ Спочатку заповніть анкету через /start,\n"
             "щоб інші могли вас бачити.",
+        )
+        return
+
+    saved = get_saved_search_filters(chat_id)
+    if saved:
+        begin_search_browsing(
+            chat_id,
+            saved["wanted_gender"],
+            saved["age_range"],
+            saved["region_mode"],
+            persist=False,
         )
         return
 
@@ -311,17 +334,29 @@ def start_filtered_search_with_age(chat_id: int, age_range: str) -> None:
     )
 
 
-def start_filtered_search_with_region(chat_id: int, region_mode: str) -> None:
-    wanted_gender = search_state.get(chat_id, {}).get("wanted_gender")
-    age_range = search_state.get(chat_id, {}).get("wanted_age_range")
+def begin_search_browsing(
+    chat_id: int,
+    wanted_gender: str,
+    age_range: str,
+    region_mode: str,
+    *,
+    persist: bool,
+) -> None:
     my_region = (get_user(chat_id) or {}).get("city")
     users_map = get_all_complete_users()
 
     if wanted_gender not in ("Чоловік", "Жінка") or not isinstance(age_range, str):
         states[chat_id] = "REGISTERED"
         search_state.pop(chat_id, None)
-        send_message(chat_id, "Фільтри пошуку збились. Спробуйте ще раз.", reply_markup=main_menu_keyboard())
+        send_message(
+            chat_id,
+            "Фільтри пошуку збились. Спробуйте ще раз.",
+            reply_markup=main_menu_keyboard(),
+        )
         return
+
+    if persist:
+        save_search_filters(chat_id, wanted_gender, age_range, region_mode)
 
     candidates = [
         uid
@@ -353,6 +388,18 @@ def start_filtered_search_with_region(chat_id: int, region_mode: str) -> None:
     }
     states[chat_id] = "SEARCHING"
     show_current_candidate(chat_id)
+
+
+def start_filtered_search_with_region(chat_id: int, region_mode: str) -> None:
+    wanted_gender = search_state.get(chat_id, {}).get("wanted_gender")
+    age_range = search_state.get(chat_id, {}).get("wanted_age_range")
+    begin_search_browsing(
+        chat_id,
+        wanted_gender,
+        age_range,
+        region_mode,
+        persist=True,
+    )
 
 
 def show_current_candidate(chat_id: int) -> None:

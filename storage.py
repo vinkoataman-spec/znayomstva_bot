@@ -11,7 +11,9 @@ from sqlalchemy import (
     Table,
     and_,
     create_engine,
+    inspect,
     select,
+    text,
 )
 
 WEEK_SECONDS = 7 * 24 * 60 * 60
@@ -51,6 +53,9 @@ users_table = Table(
     Column("photo_file_id", String(255), nullable=True),
     Column("city", String(255), nullable=True),
     Column("premium_until", BigInteger, nullable=False, default=0),
+    Column("search_wanted_gender", String(32), nullable=True),
+    Column("search_age_range", String(16), nullable=True),
+    Column("search_region_mode", String(8), nullable=True),
 )
 
 likes_table = Table(
@@ -69,6 +74,26 @@ quota_table = Table(
 )
 
 metadata.create_all(engine)
+
+
+def _migrate_users_search_columns() -> None:
+    insp = inspect(engine)
+    if not insp.has_table("users"):
+        return
+    cols = {c["name"] for c in insp.get_columns("users")}
+    alters: List[str] = []
+    if "search_wanted_gender" not in cols:
+        alters.append("ALTER TABLE users ADD COLUMN search_wanted_gender VARCHAR(32)")
+    if "search_age_range" not in cols:
+        alters.append("ALTER TABLE users ADD COLUMN search_age_range VARCHAR(16)")
+    if "search_region_mode" not in cols:
+        alters.append("ALTER TABLE users ADD COLUMN search_region_mode VARCHAR(8)")
+    for sql in alters:
+        with engine.begin() as conn:
+            conn.execute(text(sql))
+
+
+_migrate_users_search_columns()
 
 
 def now_ts() -> int:
@@ -128,6 +153,47 @@ def update_user_fields(chat_id: int, **fields: Any) -> None:
             .where(users_table.c.chat_id == chat_id)
             .values(**fields)
         )
+
+
+def get_saved_search_filters(chat_id: int) -> Optional[Dict[str, str]]:
+    with engine.begin() as conn:
+        row = conn.execute(
+            select(
+                users_table.c.search_wanted_gender,
+                users_table.c.search_age_range,
+                users_table.c.search_region_mode,
+            ).where(users_table.c.chat_id == chat_id)
+        ).first()
+    if not row:
+        return None
+    g, a, r = row.search_wanted_gender, row.search_age_range, row.search_region_mode
+    if not g or not a or not r:
+        return None
+    return {
+        "wanted_gender": str(g),
+        "age_range": str(a),
+        "region_mode": str(r),
+    }
+
+
+def save_search_filters(
+    chat_id: int, wanted_gender: str, age_range: str, region_mode: str
+) -> None:
+    update_user_fields(
+        chat_id,
+        search_wanted_gender=wanted_gender,
+        search_age_range=age_range,
+        search_region_mode=region_mode,
+    )
+
+
+def clear_search_filters(chat_id: int) -> None:
+    update_user_fields(
+        chat_id,
+        search_wanted_gender=None,
+        search_age_range=None,
+        search_region_mode=None,
+    )
 
 
 def is_profile_complete(chat_id: int) -> bool:
