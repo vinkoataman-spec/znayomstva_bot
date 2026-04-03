@@ -21,7 +21,7 @@ A simple Telegram bot for dating. Users register with a profile (gender, name, a
 | `config.py` | Reads `BOT_TOKEN` from environment, builds `API_URL` |
 | `telegram_api.py` | Low-level Telegram API calls (`sendMessage`, `sendPhoto`, `getUpdates`) |
 | `keyboards.py` | Reply keyboards (main menu, gender, profile, search, etc.) |
-| `storage.py` | In-memory storage (profiles, states, likes, premium status) |
+| `storage.py` | Database storage (SQLite/PostgreSQL) + runtime state |
 | `handlers.py` | Business logic (registration, search, likes, subscription, help) |
 | `requirements.txt` | Python dependencies |
 
@@ -48,12 +48,28 @@ pip install requests
 
 Set the environment variable **`BOT_TOKEN`** (or `TELEGRAM_BOT_TOKEN`) with your bot token from BotFather.
 
+### Database (important for persistence)
+
+The bot supports:
+- PostgreSQL via `DATABASE_URL`
+- SQLite file fallback
+
+Default behavior:
+- if `DATABASE_URL` is set -> use it
+- else if Railway Volume is mounted at `/data` -> use `sqlite:////data/bot.db`
+- else -> use local `sqlite:///bot.db`
+
 **Railway:**
 
 1. Open your project on [Railway](https://railway.app)
 2. Go to **Variables** (or **Settings** → Variables)
 3. Add: **Name** = `BOT_TOKEN`, **Value** = your token
-4. Save — the service will redeploy with the new token
+4. (Optional) Add PostgreSQL and set `DATABASE_URL` if you prefer Postgres
+5. **For simple file persistence (no Postgres):**
+   - add a **Volume** to your bot service
+   - mount path: `/data`
+   - no extra variable needed
+6. Save — the service will redeploy with the new setup
 
 **Local (Windows PowerShell):**
 
@@ -84,7 +100,7 @@ Then:
 
 ## Limitations & Notes
 
-- Data is stored in memory only; no persistence across restarts
+- Core data is stored in DB (users, likes, premium, weekly limits)
 - Premium is activated by pressing the button (no real payment integration yet)
 - For production you would need:
   - A database (PostgreSQL, SQLite)

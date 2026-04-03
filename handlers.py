@@ -2,21 +2,29 @@ import os
 from typing import Any, Dict
 
 from keyboards import (
+    CITIES,
     buy_premium_keyboard,
+    city_keyboard,
     edit_profile_keyboard,
     likes_menu_keyboard,
     main_menu_keyboard,
     gender_keyboard,
     profile_actions_keyboard,
+    search_age_keyboard,
+    search_gender_keyboard,
+    search_region_keyboard,
     search_actions_keyboard,
     subscription_keyboard,
     end_chat_keyboard,
 )
 from storage import (
     admin_state,
+    add_like,
     ensure_user,
+    get_all_complete_users,
+    get_likes_received,
+    get_user,
     is_profile_complete,
-    likes_received,
     has_premium,
     premium_expiry,
     set_premium,
@@ -24,7 +32,7 @@ from storage import (
     register_free_like,
     search_state,
     states,
-    users,
+    update_user_fields,
 )
 from telegram_api import send_message, send_photo, send_sticker
 
@@ -55,7 +63,7 @@ def handle_registration_step(message: Dict[str, Any]) -> None:
 
     if state == "CHOOSING_GENDER":
         if text in ("Чоловік", "Жінка"):
-            profile["gender"] = text
+            update_user_fields(chat_id, gender=text)
             states[chat_id] = "ENTERING_NAME"
             send_message(chat_id, "Вкажіть ваше імʼя:")
         else:
@@ -67,15 +75,15 @@ def handle_registration_step(message: Dict[str, Any]) -> None:
 
     elif state == "ENTERING_NAME":
         if text:
-            profile["name"] = text.strip()
+            update_user_fields(chat_id, name=text.strip())
             states[chat_id] = "ENTERING_AGE"
             send_message(chat_id, "Вкажіть ваш вік (числом):")
         else:
             send_message(chat_id, "Будь ласка, напишіть імʼя текстом.")
 
     elif state == "ENTERING_AGE":
-        if text.isdigit() and 16 <= int(text) <= 100:
-            profile["age"] = int(text)
+        if text.isdigit() and 14 <= int(text) <= 100:
+            update_user_fields(chat_id, age=int(text))
             states[chat_id] = "SENDING_PHOTO"
             send_message(
                 chat_id,
@@ -84,16 +92,30 @@ def handle_registration_step(message: Dict[str, Any]) -> None:
         else:
             send_message(
                 chat_id,
-                "Вік має бути числом від 16 до 100. Спробуйте ще раз:",
+                "Вік має бути числом від 14 до 100. Спробуйте ще раз:",
             )
 
     elif state == "SENDING_PHOTO":
         photos = message.get("photo")
         if photos:
             best_photo = photos[-1]
-            profile["photo_file_id"] = best_photo["file_id"]
+            update_user_fields(chat_id, photo_file_id=best_photo["file_id"])
+            states[chat_id] = "CHOOSING_CITY"
+            send_message(
+                chat_id,
+                "🏙 Оберіть ваше місто/область:",
+                reply_markup=city_keyboard(),
+            )
+        else:
+            send_message(
+                chat_id,
+                "Не бачу фото. Надішліть, будь ласка, фотографію ще раз.",
+            )
+
+    elif state == "CHOOSING_CITY":
+        if text in CITIES:
+            update_user_fields(chat_id, city=text)
             states[chat_id] = "REGISTERED"
-            likes_received.setdefault(chat_id, [])
             if chat_id not in admin_state:
                 admin_state[chat_id] = {}
 
@@ -102,13 +124,14 @@ def handle_registration_step(message: Dict[str, Any]) -> None:
             send_message(
                 chat_id,
                 "✅ Ваша анкета збережена!\n"
-                "Стать, імʼя, вік і фото записані. 💖",
+                "Стать, імʼя, вік, фото та місто записані. 💖",
             )
             send_welcome_after_registration(chat_id)
         else:
             send_message(
                 chat_id,
-                "Не бачу фото. Надішліть, будь ласка, фотографію ще раз.",
+                "Будь ласка, оберіть місто/область кнопками нижче.",
+                reply_markup=city_keyboard(),
             )
 
 
@@ -144,12 +167,13 @@ def show_profile(chat_id: int) -> None:
         )
         return
 
-    profile = users[chat_id]
+    profile = get_user(chat_id) or {}
     caption = (
         f"📋 Ваша анкета:\n"
         f"Стать: {profile['gender']}\n"
         f"Імʼя: {profile['name']}\n"
-        f"Вік: {profile['age']}"
+        f"Вік: {profile['age']}\n"
+        f"Місто/область: {profile['city']}"
     )
 
     photo_id = profile.get("photo_file_id")
@@ -175,7 +199,7 @@ def handle_edit_profile(message: Dict[str, Any]) -> None:
     chat_id = message["chat"]["id"]
     text = message.get("text", "")
     state = states.get(chat_id)
-    profile = ensure_user(chat_id)
+    ensure_user(chat_id)
 
     if state == "EDITING_PROFILE_CHOICE":
         if text == "Змінити імʼя":
@@ -196,7 +220,7 @@ def handle_edit_profile(message: Dict[str, Any]) -> None:
 
     elif state == "EDITING_NAME":
         if text:
-            profile["name"] = text.strip()
+            update_user_fields(chat_id, name=text.strip())
             states[chat_id] = "REGISTERED"
             send_message(
                 chat_id,
@@ -210,7 +234,7 @@ def handle_edit_profile(message: Dict[str, Any]) -> None:
         photos = message.get("photo")
         if photos:
             best_photo = photos[-1]
-            profile["photo_file_id"] = best_photo["file_id"]
+            update_user_fields(chat_id, photo_file_id=best_photo["file_id"])
             states[chat_id] = "REGISTERED"
             send_message(
                 chat_id,
@@ -230,20 +254,103 @@ def start_search(chat_id: int) -> None:
         )
         return
 
+    states[chat_id] = "CHOOSING_SEARCH_GENDER"
+    send_message(
+        chat_id,
+        "🔎 Етап 1/3: Оберіть, яку стать ви шукаєте:",
+        reply_markup=search_gender_keyboard(),
+    )
+
+
+def start_filtered_search(chat_id: int, wanted_gender: str) -> None:
+    # stage 2 begins after gender selection
+    if chat_id not in search_state:
+        search_state[chat_id] = {}
+    search_state[chat_id]["wanted_gender"] = wanted_gender
+    states[chat_id] = "CHOOSING_SEARCH_AGE"
+    send_message(
+        chat_id,
+        "🔎 Етап 2/3: Оберіть вік, який вас цікавить:",
+        reply_markup=search_age_keyboard(),
+    )
+
+
+def age_in_range(age: int, age_range: str) -> bool:
+    if age_range == "14-18":
+        return 14 <= age <= 18
+    if age_range == "18-25":
+        return 18 <= age <= 25
+    if age_range == "25-40":
+        return 25 <= age <= 40
+    if age_range == "40-60":
+        return 40 <= age <= 60
+    if age_range == "60+":
+        return age >= 60
+    return False
+
+
+def start_filtered_search_with_age(chat_id: int, age_range: str) -> None:
+    wanted_gender = search_state.get(chat_id, {}).get("wanted_gender")
+    if wanted_gender not in ("Чоловік", "Жінка"):
+        states[chat_id] = "CHOOSING_SEARCH_GENDER"
+        send_message(
+            chat_id,
+            "Оберіть стать для пошуку.",
+            reply_markup=search_gender_keyboard(),
+        )
+        return
+
+    search_state[chat_id]["wanted_age_range"] = age_range
+    states[chat_id] = "CHOOSING_SEARCH_REGION"
+    my_region = (get_user(chat_id) or {}).get("city", "Ваш регіон")
+    send_message(
+        chat_id,
+        f"🔎 Етап 3/3: Оберіть регіон пошуку.\n"
+        f"Ваш регіон: {my_region}",
+        reply_markup=search_region_keyboard(str(my_region)),
+    )
+
+
+def start_filtered_search_with_region(chat_id: int, region_mode: str) -> None:
+    wanted_gender = search_state.get(chat_id, {}).get("wanted_gender")
+    age_range = search_state.get(chat_id, {}).get("wanted_age_range")
+    my_region = (get_user(chat_id) or {}).get("city")
+    users_map = get_all_complete_users()
+
+    if wanted_gender not in ("Чоловік", "Жінка") or not isinstance(age_range, str):
+        states[chat_id] = "REGISTERED"
+        search_state.pop(chat_id, None)
+        send_message(chat_id, "Фільтри пошуку збились. Спробуйте ще раз.", reply_markup=main_menu_keyboard())
+        return
+
     candidates = [
         uid
-        for uid in users.keys()
-        if uid != chat_id and is_profile_complete(uid)
+        for uid in users_map.keys()
+        if uid != chat_id
+        and users_map.get(uid, {}).get("gender") == wanted_gender
+        and age_in_range(int(users_map.get(uid, {}).get("age", 0)), age_range)
+        and (
+            region_mode == "all"
+            or users_map.get(uid, {}).get("city") == my_region
+        )
     ]
     if not candidates:
         send_message(
             chat_id,
-            "😔 Поки що немає інших анкет для показу.",
+            "😔 За обраними фільтрами поки що немає анкет.",
             reply_markup=main_menu_keyboard(),
         )
+        states[chat_id] = "REGISTERED"
+        search_state.pop(chat_id, None)
         return
 
-    search_state[chat_id] = {"candidates": candidates, "index": 0}
+    search_state[chat_id] = {
+        "candidates": candidates,
+        "index": 0,
+        "wanted_gender": wanted_gender,
+        "wanted_age_range": age_range,
+        "wanted_region_mode": region_mode,
+    }
     states[chat_id] = "SEARCHING"
     show_current_candidate(chat_id)
 
@@ -271,7 +378,7 @@ def show_current_candidate(chat_id: int) -> None:
         return
 
     target_id = candidates[index]
-    profile = users.get(target_id)
+    profile = get_user(target_id)
     if not profile:
         search_state[chat_id]["index"] += 1
         show_current_candidate(chat_id)
@@ -281,7 +388,8 @@ def show_current_candidate(chat_id: int) -> None:
         f"Анкета користувача:\n"
         f"Стать: {profile['gender']}\n"
         f"Імʼя: {profile['name']}\n"
-        f"Вік: {profile['age']}"
+        f"Вік: {profile['age']}\n"
+        f"Місто/область: {profile['city']}"
     )
 
     photo_id = profile.get("photo_file_id")
@@ -340,9 +448,7 @@ def handle_search_actions(message: Dict[str, Any]) -> None:
                 return
             register_free_like(chat_id)
 
-        likes_received.setdefault(target_id, [])
-        if chat_id not in likes_received[target_id]:
-            likes_received[target_id].append(chat_id)
+        add_like(chat_id, target_id)
         if STICKER_LIKE:
             send_sticker(chat_id, STICKER_LIKE)
         send_message(chat_id, "💜 Ви поставили лайк цій анкеті.")
@@ -423,7 +529,7 @@ def handle_likes_section(chat_id: int) -> None:
         )
         return
 
-    user_likes = likes_received.get(chat_id, [])
+    user_likes = get_likes_received(chat_id)
     count = len(user_likes)
     if count == 0:
         send_message(
@@ -441,7 +547,7 @@ def handle_likes_section(chat_id: int) -> None:
 
 
 def show_who_liked_me(chat_id: int) -> None:
-    user_likes = likes_received.get(chat_id, [])
+    user_likes = get_likes_received(chat_id)
     if not user_likes:
         send_message(
             chat_id,
@@ -451,14 +557,15 @@ def show_who_liked_me(chat_id: int) -> None:
         return
 
     for liker_id in user_likes:
-        profile = users.get(liker_id)
+        profile = get_user(liker_id)
         if not profile:
             continue
         caption = (
             f"❤️ Той, хто вас лайкнув:\n"
             f"Стать: {profile['gender']}\n"
             f"Імʼя: {profile['name']}\n"
-            f"Вік: {profile['age']}"
+            f"Вік: {profile['age']}\n"
+            f"Місто/область: {profile['city']}"
         )
         photo_id = profile.get("photo_file_id")
         if photo_id:
@@ -613,6 +720,7 @@ def handle_update(update: Dict[str, Any]) -> None:
         "ENTERING_NAME",
         "ENTERING_AGE",
         "SENDING_PHOTO",
+        "CHOOSING_CITY",
     }:
         handle_registration_step(message)
         return
@@ -623,6 +731,61 @@ def handle_update(update: Dict[str, Any]) -> None:
 
     if state == "SEARCHING":
         handle_search_actions(message)
+        return
+
+    if state == "CHOOSING_SEARCH_GENDER":
+        if text == "Шукаю Чоловіка":
+            start_filtered_search(chat_id, "Чоловік")
+            return
+        if text == "Шукаю Жінку":
+            start_filtered_search(chat_id, "Жінка")
+            return
+        if text == "Назад до меню":
+            states[chat_id] = "REGISTERED"
+            send_message(chat_id, "Повертаю в головне меню.", reply_markup=main_menu_keyboard())
+            return
+        send_message(
+            chat_id,
+            "Оберіть стать кнопками нижче.",
+            reply_markup=search_gender_keyboard(),
+        )
+        return
+
+    if state == "CHOOSING_SEARCH_AGE":
+        if text in {"14-18", "18-25", "25-40", "40-60", "60+"}:
+            start_filtered_search_with_age(chat_id, text)
+            return
+        if text == "Назад до меню":
+            states[chat_id] = "REGISTERED"
+            search_state.pop(chat_id, None)
+            send_message(chat_id, "Повертаю в головне меню.", reply_markup=main_menu_keyboard())
+            return
+        send_message(
+            chat_id,
+            "Оберіть діапазон віку кнопками нижче.",
+            reply_markup=search_age_keyboard(),
+        )
+        return
+
+    if state == "CHOOSING_SEARCH_REGION":
+        my_region = (get_user(chat_id) or {}).get("city", "Ваш регіон")
+        my_region_btn = f"Твій регіон ({my_region})"
+        if text == my_region_btn:
+            start_filtered_search_with_region(chat_id, "my")
+            return
+        if text == "Уся Україна":
+            start_filtered_search_with_region(chat_id, "all")
+            return
+        if text == "Назад до меню":
+            states[chat_id] = "REGISTERED"
+            search_state.pop(chat_id, None)
+            send_message(chat_id, "Повертаю в головне меню.", reply_markup=main_menu_keyboard())
+            return
+        send_message(
+            chat_id,
+            "Оберіть регіон кнопками нижче.",
+            reply_markup=search_region_keyboard(str(my_region)),
+        )
         return
 
     if state == "ASKING_HELP":
